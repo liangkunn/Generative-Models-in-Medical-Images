@@ -1,7 +1,7 @@
 # Generative-Models-in-Medical-Images
 A repository for data augmentation in medical images, using VAE and GANs (conditional GANs, Wasserstein GAN with/without Gradient Penalty)
 
-Derma.npz is one of the datasets from https://medmnist.com/
+dermamnist.npz is one of the datasets from https://medmnist.com/
 
 The original derma iamges:
 
