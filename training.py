@@ -366,7 +366,7 @@ def CWGAN_training(data, model,
     return log_dict
 
 # a train function which will be included in another .py file
-def WGAN_training(data, model, 
+def WGAN_training_v1(data, model, 
                    num_epochs, 
                    latent_dim, 
                    optim_discr,
@@ -550,7 +550,7 @@ def WGAN_training(data, model,
     return log_dict
 
 # a train function which will be included in another .py file
-def W_GAN_training(data, model, 
+def W_GAN_training_v2(data, model, 
                    num_epochs, 
                    latent_dim, 
                    optim_discr,
@@ -705,7 +705,7 @@ def W_GAN_training(data, model,
             if not batch_indx % logging_interval:
                 print('Epoch: %03d/%03d | Batch %03d/%03d | Gen/Dis Loss: %.4f/%.4f' 
                     % (epoch+1, num_epochs, batch_indx, 
-                        len(train), generator_loss.item(), discriminator_loss.item()))
+                        len(data), generator_loss.item(), discriminator_loss.item()))
 
         with torch.no_grad():
             fake_images = model.generator_forward(fixed_noise).detach().cpu()
