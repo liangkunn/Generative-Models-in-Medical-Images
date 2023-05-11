@@ -3,11 +3,8 @@ import torch
 import time
 import torchvision
 import torch.nn as nn
-from torchvision import datasets
 from torchvision import transforms as tt
-from torch.utils.data import DataLoader, Dataset
 import torch.nn.functional as F
-import matplotlib.pyplot as plt
 import os
 
 def Linear_GAN_training(data, model, 
@@ -179,6 +176,149 @@ def VAE_training(data, model, num_epochs, optimizer, device,
     return log_dict
 
 
+# a train function which will be included in another .py file
+def DC_GAN_training(data, model, 
+                    num_epochs, 
+                    latent_dim, 
+                    optim_discr,
+                    optim_gen,
+                    device,
+                    save_model=None):
+    # from tutorial and paper, initialize the weights    
+    # def weights_init(m):
+    #     classname = m.__class__.__name__
+    #     if classname.find('Conv') != -1:
+    #         nn.init.normal_(m.weight.data, 0.0, 0.02)
+    #     elif classname.find('BatchNorm') != -1:
+    #         nn.init.normal_(m.weight.data, 1.0, 0.02)
+    #         nn.init.constant_(m.bias.data, 0)
+
+    # smmothing the labels, ow discriminator too strong
+    # CE for multi-class
+    # loss_function = F.cross_entropy 
+    # BCE for binary class
+    loss_function = F.binary_cross_entropy_with_logits
+
+    log_dict={'train_generator_loss_per_batch': [],
+            'train_discriminator_loss_per_batch': [],
+            'train_discriminator_real_acc_per_batch': [],
+            'train_discriminator_fake_acc_per_batch': [],
+            'images_from_noise_per_epoch': []
+            }
+    # fixed noise is used to generate images when generator is trained
+    # fixed_noise = torch.randn(128, latent_dim, 1, 1, device=device)
+    # fixed_noise = torch.randn(128, latent_dim, device=device)
+    start_time = time.time()
+
+    # initialize parameters
+    # model.generator.apply(weights_init)
+    # model.discriminator.apply(weights_init)
+
+    logging_interval=100
+    
+    for epoch in range(num_epochs):
+        # need to print the image out
+        # for step in range(num_epoch):
+        model.train()
+        for batch_indx, (images, _) in enumerate(data): # with batch_index 0-16, and iamges shape NCHW (16,3,28,28)
+            batch_size = images.size(0) # how many images in one batch
+            
+            # real images
+            real_images = images.to(device)
+            # print('real_images: ', real_images.shape)
+            real_labels = torch.ones(batch_size, device=device)
+            # print('real_labels: ', real_labels.shape)
+
+            # fake images
+            # noise = torch.randn(batch_size, latent_dim, 1, 1, device=device)
+            noise = torch.randn(batch_size, latent_dim, device=device)
+            # print('noise shape: ', noise.shape)
+            fake_images = model.generator_forward(noise)
+            # print('fake_images: ', fake_images.shape)
+            fake_labels = torch.zeros(batch_size, device=device)
+            # print('fake_labels: ', fake_labels.shape)
+            flipped_fake_labels = real_labels # flip the labels for the generator training
+            
+            #######################################################
+            ## same training process as Linear GAN,
+            ## we train the discriminator first
+            #######################################################
+            
+            optim_discr.zero_grad()
+            
+            # calculate loss on real images
+            real_img_pred = model.discriminator_forward(real_images).view(-1)
+            # print('real_img_pred: ', real_img_pred.shape)
+
+            # label smoothing here to avoid discriminator being too strong
+            real_img_loss = loss_function(real_img_pred, real_labels) 
+            
+            # caculate loss on fake images
+            fake_img_pred = model.discriminator_forward(fake_images.detach()).view(-1)
+            # print('fake_img_pred: ', fake_img_pred.shape)
+            fake_img_loss = loss_function(fake_img_pred, fake_labels) 
+            
+            # backward propagation
+            discriminator_loss = 0.5*(real_img_loss + fake_img_loss)
+            # discriminator_loss = 0.7*real_img_loss + 0.3*fake_img_loss
+            discriminator_loss.backward(retain_graph=True)
+            
+            # performs a parameter update based on the current gradient 
+            optim_discr.step()
+            
+            #######################################################
+            ## train the generator
+            #######################################################
+            
+            optim_gen.zero_grad()
+            
+            # calculate loss on generate images
+            fake_img_pred = model.discriminator_forward(fake_images).view(-1)
+            # flip the label for fake iamges to use gradient descent instead of modifying the loss function
+            generator_loss = loss_function(fake_img_pred, flipped_fake_labels) # tricks applied here, fool discriminator
+            generator_loss.backward(retain_graph=True)
+            
+            # performs a parameter update based on the current gradient 
+            
+            optim_gen.step()
+            
+            #######################################################
+            ## logging
+            #######################################################   
+            log_dict['train_generator_loss_per_batch'].append(generator_loss.item())
+            log_dict['train_discriminator_loss_per_batch'].append(discriminator_loss.item())
+            
+            # predicted_labels_real = torch.where(real_img_pred.detach() > 0., 1., 0.)
+            # predicted_labels_fake = torch.where(fake_img_pred.detach() > 0., 1., 0.) # because we have flipped lables
+            # acc_real = (predicted_labels_real == real_labels).float().mean()*100.
+            # acc_fake = (predicted_labels_fake == fake_labels).float().mean()*100.
+            # log_dict['train_discriminator_real_acc_per_batch'].append(acc_real.item())
+            # log_dict['train_discriminator_fake_acc_per_batch'].append(acc_fake.item())         
+            
+            if not batch_indx % logging_interval:
+                print('Epoch: %03d/%03d | Batch %03d/%03d | Gen/Dis Loss: %.4f/%.4f' 
+                    % (epoch+1, num_epochs, batch_indx, 
+                        len(train), generator_loss.item(), discriminator_loss.item()))
+                
+        random_noise = torch.randn(64, latent_dim, device=device)
+        with torch.no_grad():
+            fake_images = model.generator_forward(random_noise).detach().cpu()
+            log_dict['images_from_noise_per_epoch'].append(
+            torchvision.utils.make_grid(fake_images, padding=2, normalize=True))
+        
+        if epoch % 100 == 0:
+        # plot the images for each epoch, no good then cut it off
+            print('Time elapsed: %.2f min' % ((time.time() - start_time)/60))
+            plt.figure(figsize=(8, 8))
+            plt.axis('off')
+            plt.title(f'Generated images at epoch {epoch}')
+            plt.imshow(np.transpose(log_dict['images_from_noise_per_epoch'][epoch], (1, 2, 0)))
+            plt.show()
+
+    print('Total Training Time: %.2f min' % ((time.time() - start_time)/60))   
+    if save_model is not None:
+        torch.save(model.state_dict(), save_model) 
+    return log_dict
 
 # a train function which will be included in another .py file
 def CWGAN_training(data, model, 
