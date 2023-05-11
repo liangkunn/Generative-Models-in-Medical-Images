@@ -7,7 +7,7 @@ The original derma iamges:
 
 <img width="480" alt="real images" src="https://user-images.githubusercontent.com/36016499/230223300-7052d41f-a710-40f0-9b69-355dff596c77.png">
 
-Using Wgan_gp, the generated derma images are as follows:
+Using non weight sampler Wgan_gp, the generated derma images are as follows:
 
 Epoch0:
 
