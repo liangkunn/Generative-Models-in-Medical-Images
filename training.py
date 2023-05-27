@@ -6,6 +6,7 @@ import torch.nn as nn
 from torchvision import transforms as tt
 import torch.nn.functional as F
 import os
+import matplotlib.pyplot as plt
 
 def Linear_GAN_training(data, model, 
                      num_epochs, 
@@ -298,7 +299,7 @@ def DC_GAN_training(data, model,
             if not batch_indx % logging_interval:
                 print('Epoch: %03d/%03d | Batch %03d/%03d | Gen/Dis Loss: %.4f/%.4f' 
                     % (epoch+1, num_epochs, batch_indx, 
-                        len(train), generator_loss.item(), discriminator_loss.item()))
+                        len(data), generator_loss.item(), discriminator_loss.item()))
                 
         random_noise = torch.randn(64, latent_dim, device=device)
         with torch.no_grad():
